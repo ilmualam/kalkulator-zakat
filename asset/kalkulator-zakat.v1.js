@@ -22,7 +22,7 @@ function saveState(){
   try{
     var ids = ['zkPdGaji','zkPdLain','zkPdBelanja','zkPdKaedah','zkSpBaki','zkEmBerat','zkEmUruf',
       'zkPnAset','zkPnLiabiliti','zkPlNilai','zkPlDividen','zkKwPengeluaran','zkFtAhli','zkFtKadar',
-      'zkGoldPrice','zkGoldGram'];
+      'zkGoldPrice','zkGoldGram','zdHari','zdKadar','zdTahun','zdKadarManual'];
     var state = {};
     for(var i=0;i<ids.length;i++){
       var el = document.getElementById(ids[i]);
@@ -115,6 +115,20 @@ function calcFitrah(){
   setText('zkFtOut', fmt(zakat));
 }
 
+// v1.1.0 — Fidyah calculator (hari x kadar x tahun tertangguh)
+function calcFidyah(){
+  var hari = num('zdHari');
+  var kadarSelect = num('zdKadar');
+  var kadarManual = num('zdKadarManual');
+  var kadar = kadarManual > 0 ? kadarManual : kadarSelect;
+  var tahunEl = document.getElementById('zdTahun');
+  var tahun = tahunEl ? (parseFloat(tahunEl.value) || 1) : 1;
+  if(tahun < 1) tahun = 1;
+  var jumlah = hari * kadar * tahun;
+  setText('zdOut', fmt(jumlah));
+  setText('zdOutNote', hari + ' hari × ' + fmt(kadar) + ' × ' + tahun + ' tahun tertangguh');
+}
+
 function calcAll(){
   calcPendapatan();
   calcSimpanan();
@@ -123,6 +137,7 @@ function calcAll(){
   calcPelaburan();
   calcKwsp();
   calcFitrah();
+  calcFidyah();
 }
 
 function switchTab(name){
@@ -149,15 +164,11 @@ function buildShareText(){
   return lines.join('\n');
 }
 
-function init(){
-  var tool = document.getElementById('ilmxZkTool');
-  if(!tool) return;
+function attachToolListeners(toolEl){
+  if(!toolEl || toolEl.getAttribute('data-ilmx-bound') === '1') return;
+  toolEl.setAttribute('data-ilmx-bound', '1');
 
-  loadState();
-  calcAll();
-
-  // Event delegation — single listener on the tool container (INP-friendly)
-  tool.addEventListener('click', function(e){
+  toolEl.addEventListener('click', function(e){
     var tabBtn = e.target.closest('.ilmx-zk-tab');
     if(tabBtn){
       switchTab(tabBtn.getAttribute('data-tab'));
@@ -174,37 +185,51 @@ function init(){
     }
     if(e.target.id === 'zkResetBtn'){
       try{ localStorage.removeItem(ZK_STORE_KEY); }catch(err){}
-      var inputs = tool.querySelectorAll('input');
+      var inputs = toolEl.querySelectorAll('input');
       for(var i=0;i<inputs.length;i++){ inputs[i].value = ''; }
       calcAll();
       return;
     }
   });
 
-  tool.addEventListener('input', function(e){
+  toolEl.addEventListener('input', function(e){
     if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT'){
       calcAll();
       saveState();
     }
   });
 
-  tool.addEventListener('change', function(e){
+  toolEl.addEventListener('change', function(e){
     if(e.target.tagName === 'SELECT'){
       calcAll();
       saveState();
     }
   });
+}
 
-  // FAQ accordion — event delegation, classList only
-  var faqWrap = document.getElementById('ilmxZkFaq');
-  if(faqWrap){
-    faqWrap.addEventListener('click', function(e){
-      var q = e.target.closest('.ilmx-zk-faq-q');
-      if(!q) return;
-      var item = q.closest('.ilmx-zk-faq-item');
-      if(item) item.classList.toggle('is-open');
-    });
-  }
+function init(){
+  loadState();
+  calcAll();
+
+  // Supports the full hub tool (#ilmxZkTool) and single-purpose embeds
+  // (e.g. #ilmxFdTool on the Fidyah page) sharing the same calc engine.
+  attachToolListeners(document.getElementById('ilmxZkTool'));
+  attachToolListeners(document.getElementById('ilmxFdTool'));
+
+  // FAQ accordion — event delegation, classList only. Reused across
+  // ilmxZkFaq (hub/fitrah pages) and ilmxFdFaq (fidyah page).
+  ['ilmxZkFaq','ilmxFdFaq'].forEach(function(id){
+    var faqWrap = document.getElementById(id);
+    if(faqWrap && faqWrap.getAttribute('data-ilmx-bound') !== '1'){
+      faqWrap.setAttribute('data-ilmx-bound', '1');
+      faqWrap.addEventListener('click', function(e){
+        var q = e.target.closest('[class*="faq-q"]');
+        if(!q) return;
+        var item = q.closest('[class*="faq-item"]');
+        if(item) item.classList.toggle('is-open');
+      });
+    }
+  });
 }
 
 setTimeout(init, 300);
